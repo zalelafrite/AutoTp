@@ -1,42 +1,66 @@
 task.wait(2)
 
-local Players = game:GetService("Players")
-local UIS = game:GetService("UserInputService")
-local player = Players.LocalPlayer
+local player = game.Players.LocalPlayer
+local camera = workspace.CurrentCamera
 
--- UI
-local gui = Instance.new("ScreenGui", player:WaitForChild("PlayerGui"))
-local label = Instance.new("TextLabel", gui)
-label.Size = UDim2.new(0,320,0,50)
-label.Position = UDim2.new(0.5,-160,0,20)
-label.BackgroundTransparency = 0.3
-label.BackgroundColor3 = Color3.fromRGB(0,0,0)
-label.TextColor3 = Color3.fromRGB(255,255,255)
-label.TextScaled = true
+-- =========================
+-- 🔥 UI
+-- =========================
 
--- Highlight
-local highlight = Instance.new("Highlight")
-highlight.FillColor = Color3.fromRGB(255, 220, 0)
-highlight.OutlineColor = Color3.fromRGB(0,0,0)
-highlight.FillTransparency = 0.3
+local gui = Instance.new("ScreenGui", player.PlayerGui)
+
+local frame = Instance.new("Frame", gui)
+frame.Size = UDim2.new(0,200,0,150)
+frame.Position = UDim2.new(0,20,0.5,-75)
+frame.BackgroundColor3 = Color3.fromRGB(30,30,30)
+
+local function makeButton(text, y)
+    local b = Instance.new("TextButton", frame)
+    b.Size = UDim2.new(1,0,0,40)
+    b.Position = UDim2.new(0,0,0,y)
+    b.Text = text
+    b.BackgroundColor3 = Color3.fromRGB(50,50,50)
+    b.TextColor3 = Color3.new(1,1,1)
+    return b
+end
+
+local bestBtn = makeButton("💰 Best Income", 0)
+local rareBtn = makeButton("⭐ Rarest", 50)
+local tpBtn = makeButton("📍 TP", 100)
+
+-- =========================
+-- 🔥 VARIABLES
+-- =========================
 
 local currentTarget = nil
+local line = nil
+local billboard = nil
 
--- Détection du meilleur
-local function getBestBrainrot()
+-- =========================
+-- 🔥 TROUVER BRAINROT
+-- =========================
+
+local function getMoney(model)
+    for _,v in ipairs(model:GetDescendants()) do
+        if v:IsA("TextLabel") and string.find(v.Text, "%$/s") then
+            return v.Text
+        end
+    end
+    return "?"
+end
+
+local function findBest()
     local best = nil
     local bestValue = 0
 
-    for _, v in ipairs(workspace:GetDescendants()) do
-        if v:IsA("Model") and v.Name:find("Brainrot") then
+    for _,v in ipairs(workspace:GetDescendants()) do
+        if v:IsA("Model") and v:FindFirstChildWhichIsA("BasePart") then
             
-            local value = 0
-            if v.Name:find("Secret") then value = 4 end
-            if v.Name:find("God") then value = 3 end
-            if v.Name:find("Mythic") then value = 2 end
+            local txt = getMoney(v)
+            local num = tonumber(txt:match("%d+"))
 
-            if value > bestValue then
-                bestValue = value
+            if num and num > bestValue then
+                bestValue = num
                 best = v
             end
         end
@@ -45,36 +69,81 @@ local function getBestBrainrot()
     return best
 end
 
--- Scan loop
-task.spawn(function()
-    while task.wait(1) do
-        local best = getBestBrainrot()
-        currentTarget = best
+local function findRarest()
+    local last = nil
 
-        if best and best.PrimaryPart then
-            highlight.Parent = best
-
-            local char = player.Character
-            if char and char.PrimaryPart then
-                local dist = (char.PrimaryPart.Position - best.PrimaryPart.Position).Magnitude
-                label.Text = "🔥 Best: "..best.Name.." | "..math.floor(dist).." studs | Press F"
-            end
-        else
-            highlight.Parent = nil
-            label.Text = "No brainrot found"
+    for _,v in ipairs(workspace:GetDescendants()) do
+        if v:IsA("Model") then
+            last = v
         end
     end
+
+    return last
+end
+
+-- =========================
+-- 🔥 VISUEL
+-- =========================
+
+local function clearVisual()
+    if line then line:Destroy() end
+    if billboard then billboard:Destroy() end
+end
+
+local function showTarget(model)
+    clearVisual()
+
+    if not model then return end
+    currentTarget = model
+
+    local part = model:FindFirstChildWhichIsA("BasePart")
+    if not part then return end
+
+    -- 🔥 Billboard (nom + argent)
+    billboard = Instance.new("BillboardGui", part)
+    billboard.Size = UDim2.new(0,200,0,50)
+    billboard.StudsOffset = Vector3.new(0,3,0)
+
+    local text = Instance.new("TextLabel", billboard)
+    text.Size = UDim2.new(1,0,1,0)
+    text.BackgroundTransparency = 1
+    text.TextColor3 = Color3.new(1,1,0)
+    text.TextScaled = true
+    text.Text = model.Name .. "\n" .. getMoney(model)
+
+    -- 🔥 ligne
+    line = Instance.new("Beam")
+
+    local a0 = Instance.new("Attachment", player.Character.Head)
+    local a1 = Instance.new("Attachment", part)
+
+    line.Attachment0 = a0
+    line.Attachment1 = a1
+    line.Width0 = 0.2
+    line.Width1 = 0.2
+    line.Color = ColorSequence.new(Color3.new(1,1,0))
+    line.Parent = player.Character.Head
+end
+
+-- =========================
+-- 🔥 ACTIONS
+-- =========================
+
+bestBtn.MouseButton1Click:Connect(function()
+    local target = findBest()
+    showTarget(target)
 end)
 
--- TP MANUEL (touche F)
-UIS.InputBegan:Connect(function(input, gp)
-    if gp then return end
-    if input.KeyCode == Enum.KeyCode.F then
-        if currentTarget and currentTarget.PrimaryPart then
-            local char = player.Character
-            if char and char.PrimaryPart then
-                char:SetPrimaryPartCFrame(currentTarget.PrimaryPart.CFrame + Vector3.new(0,5,0))
-            end
+rareBtn.MouseButton1Click:Connect(function()
+    local target = findRarest()
+    showTarget(target)
+end)
+
+tpBtn.MouseButton1Click:Connect(function()
+    if currentTarget and player.Character then
+        local part = currentTarget:FindFirstChildWhichIsA("BasePart")
+        if part then
+            player.Character:MoveTo(part.Position + Vector3.new(0,3,0))
         end
     end
 end)
